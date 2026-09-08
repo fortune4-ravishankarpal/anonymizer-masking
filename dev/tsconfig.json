@@ -21,12 +21,6 @@
       ],
       "anonymizer-masking": [
         "../src/index.ts"
-      ],
-      "anonymizer-masking/client": [
-        "../src/exports/client.ts"
-      ],
-      "anonymizer-masking/rsc": [
-        "../src/exports/rsc.ts"
       ]
     },
     "noEmit": true,

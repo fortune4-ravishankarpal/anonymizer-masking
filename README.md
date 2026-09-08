@@ -88,6 +88,20 @@ plugins: [
 
 Later when you rename the plugin or add additional options, **make sure to update it here**.
 
+### Data Anonymization Workflow
+
+This plugin registers `anonymization-requests` and `anonymized-identities`.
+Requests can target `users`, `customers`, or `orders`. An authenticated user can
+create a pending request, but only a user whose `roles` field contains `admin`
+can read or update requests. When an admin changes a request from `pending` to
+`approved`, the plugin creates an identity mapping, masks the target document's
+`name`, `email`, `phone`, and `address` fields, sets `isAnonymized` to `true`,
+and marks the request `completed`.
+
+The target collection must expose the fields used by the masking policy. The
+default email value is `anon-{anonymousId}@anonymized.local`; the generated
+`anonymousId` is a UUID stored in `anonymized-identities`.
+
 You may wish to add collections or expand the test project depending on the purpose of your plugin. Just make sure to keep this dev environment as simplified as possible - users should be able to install your plugin without additional configuration required.
 
 When you’re ready to start development, initiate the project with `pnpm/npm/yarn dev` and pull up [http://localhost:3000](http://localhost:3000) in your browser.
@@ -161,18 +175,15 @@ config.onInit = async (payload) => {
 
 If you wish to add to the onInit, you must include the **async/await**. We don’t use spread syntax in this case, instead you must await the existing `onInit` before running additional functionality.
 
-In the template, we have stubbed out some addition `onInit` actions that seeds in a document to the `plugin-collection`, you can use this as a base point to add more actions - and if not needed, feel free to delete it.
-
 ##### Types.ts
 
 If your plugin has options, you should define and provide types for these options.
 
 ```ts
 export type MyPluginConfig = {
-  /**
-   * List of collections to add a custom field
-   */
-  collections?: Partial<Record<CollectionSlug, true>>
+  collections: Record<string, {
+    fields: Record<string, string | number | boolean | null | ((context: { anonymousId: string }) => unknown)>
+  }>
   /**
    * Disable the plugin
    */

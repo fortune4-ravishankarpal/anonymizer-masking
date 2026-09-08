@@ -1,113 +1,52 @@
-import type { CollectionSlug, Config } from 'payload'
+import type { Config } from 'payload'
 
-import { customEndpointHandler } from './endpoints/customEndpointHandler.js'
+import { AnonymizationRequests } from './collections/AnonymizationRequests.js'
+import { AnonymizedIdentities } from './collections/AnonymizedIdentities.js'
+import { createAnonymizeApprovedRequest } from './hooks/anonymizeApprovedRequest.js'
+
+export type AnonymizationValue =
+  | boolean
+  | null
+  | number
+  | string
+  | ((context: { anonymousId: string }) => unknown)
+
+export type AnonymizationCollectionConfig = {
+  fields: Record<string, AnonymizationValue>
+}
 
 export type AnonymizerMaskingConfig = {
-  /**
-   * List of collections to add a custom field
-   */
-  collections?: Partial<Record<CollectionSlug, true>>
+  collections: Record<string, AnonymizationCollectionConfig>
   disabled?: boolean
 }
 
 export const anonymizerMasking =
   (pluginOptions: AnonymizerMaskingConfig) =>
-  (config: Config): Config => {
-    if (!config.collections) {
-      config.collections = []
-    }
+    (config: Config): Config => {
+      const configuredCollections = Object.keys(pluginOptions.collections)
 
-    config.collections.push({
-      slug: 'plugin-collection',
-      fields: [
-        {
-          name: 'id',
-          type: 'text',
-        },
-      ],
-    })
-
-    if (pluginOptions.collections) {
-      for (const collectionSlug in pluginOptions.collections) {
-        const collection = config.collections.find(
-          (collection) => collection.slug === collectionSlug,
-        )
-
-        if (collection) {
-          collection.fields.push({
-            name: 'addedByPlugin',
-            type: 'text',
-            admin: {
-              position: 'sidebar',
-            },
-          })
-        }
-      }
-    }
-
-    /**
-     * If the plugin is disabled, we still want to keep added collections/fields so the database schema is consistent which is important for migrations.
-     * If your plugin heavily modifies the database schema, you may want to remove this property.
-     */
-    if (pluginOptions.disabled) {
-      return config
-    }
-
-    if (!config.endpoints) {
-      config.endpoints = []
-    }
-
-    if (!config.admin) {
-      config.admin = {}
-    }
-
-    if (!config.admin.components) {
-      config.admin.components = {}
-    }
-
-    if (!config.admin.components.beforeDashboard) {
-      config.admin.components.beforeDashboard = []
-    }
-
-    config.admin.components.beforeDashboard.push(
-      `anonymizer-masking/client#BeforeDashboardClient`,
-    )
-    config.admin.components.beforeDashboard.push(
-      `anonymizer-masking/rsc#BeforeDashboardServer`,
-    )
-
-    config.endpoints.push({
-      handler: customEndpointHandler,
-      method: 'get',
-      path: '/my-plugin-endpoint',
-    })
-
-    const incomingOnInit = config.onInit
-
-    config.onInit = async (payload) => {
-      // Ensure we are executing any existing onInit functions before running our own.
-      if (incomingOnInit) {
-        await incomingOnInit(payload)
+      if (configuredCollections.length === 0) {
+        throw new Error('anonymizerMasking requires at least one configured collection')
       }
 
-      const { totalDocs } = await payload.count({
-        collection: 'plugin-collection',
-        where: {
-          id: {
-            equals: 'seeded-by-plugin',
-          },
-        },
+      config.collections = [
+        ...(config.collections || []),
+        AnonymizationRequests,
+        AnonymizedIdentities,
+      ]
+
+      AnonymizationRequests.fields = AnonymizationRequests.fields.map((field) => {
+        if (field.name !== 'targetCollection' || field.type !== 'select') return field
+
+        return { ...field, options: configuredCollections }
       })
 
-      if (totalDocs === 0) {
-        await payload.create({
-          collection: 'plugin-collection',
-          data: {
-            id: 'seeded-by-plugin',
-          },
-        })
-      }
-    }
+      if (pluginOptions.disabled) return config
 
-    return config
-  }
+      AnonymizationRequests.hooks = {
+        ...AnonymizationRequests.hooks,
+        afterChange: [createAnonymizeApprovedRequest(pluginOptions.collections)],
+      }
+
+      return config
+    }

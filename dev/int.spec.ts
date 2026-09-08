@@ -1,10 +1,8 @@
 import type { Payload } from 'payload'
 
 import config from '@payload-config'
-import { createPayloadRequest, getPayload } from 'payload'
+import { getPayload } from 'payload'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
-
-import { customEndpointHandler } from '../src/endpoints/customEndpointHandler.js'
 
 let payload: Payload
 
@@ -17,36 +15,107 @@ beforeAll(async () => {
 })
 
 describe('Plugin integration tests', () => {
-  test('should query custom endpoint added by plugin', async () => {
-    const request = new Request('http://localhost:3000/api/my-plugin-endpoint', {
-      method: 'GET',
+  test('anonymizes an approved customer request', async () => {
+    const admin = await payload.findByID({
+      collection: 'users',
+      id: (await payload.find({ collection: 'users', limit: 1 })).docs[0].id,
     })
-
-    const payloadRequest = await createPayloadRequest({ config, request })
-    const response = await customEndpointHandler(payloadRequest)
-    expect(response.status).toBe(200)
-
-    const data = await response.json()
-    expect(data).toMatchObject({
-      message: 'Hello from custom endpoint',
-    })
-  })
-
-  test('can create post with custom text field added by plugin', async () => {
-    const post = await payload.create({
-      collection: 'posts',
+    const customer = await payload.create({
+      collection: 'customers',
       data: {
-        addedByPlugin: 'added by plugin',
+        address: '123 Example Street',
+        email: 'person@example.com',
+        name: 'Private Person',
+        phone: '555-0100',
       },
     })
-    expect(post.addedByPlugin).toBe('added by plugin')
+
+    const request = await payload.create({
+      collection: 'anonymization-requests',
+      data: {
+        requestedBy: admin.id,
+        targetCollection: 'customers',
+        targetDocId: customer.id,
+      },
+      overrideAccess: false,
+      user: admin,
+    })
+
+    await payload.update({
+      collection: 'anonymization-requests',
+      data: { status: 'approved' },
+      id: request.id,
+      overrideAccess: false,
+      user: admin,
+    })
+
+    const anonymizedCustomer = await payload.findByID({
+      collection: 'customers',
+      id: customer.id,
+    })
+    const completedRequest = await payload.findByID({
+      collection: 'anonymization-requests',
+      id: request.id,
+      depth: 0,
+    })
+
+    expect(anonymizedCustomer).toMatchObject({
+      address: null,
+      email: expect.stringMatching(/^anon-[0-9a-f-]+@anonymized\.local$/),
+      isAnonymized: true,
+      name: 'Anonymized User',
+      phone: null,
+    })
+    expect(completedRequest.status).toBe('completed')
+    expect(completedRequest.approvedBy).toBe(admin.id)
+    expect(completedRequest.anonymizedRecord).toBeTruthy()
+
+    const identity = await payload.findByID({
+      collection: 'anonymized-identities',
+      id: completedRequest.anonymizedRecord as string,
+    })
+    expect(identity).toMatchObject({
+      originalCollection: 'customers',
+      originalDocId: customer.id,
+      maskedFields: ['name', 'email', 'phone', 'address', 'isAnonymized'],
+    })
   })
 
-  test('plugin creates and seeds plugin-collection', async () => {
-    expect(payload.collections['plugin-collection']).toBeDefined()
+  test('only admins can read anonymization requests', async () => {
+    const regularUser = await payload.create({
+      collection: 'users',
+      data: {
+        email: 'regular@payloadcms.com',
+        password: 'test',
+        roles: ['user'],
+      },
+    })
+    const request = await payload.create({
+      collection: 'anonymization-requests',
+      data: {
+        requestedBy: regularUser.id,
+        targetCollection: 'customers',
+        targetDocId: 'not-a-real-customer',
+      },
+      overrideAccess: true,
+    })
 
-    const { docs } = await payload.find({ collection: 'plugin-collection' })
-
-    expect(docs).toHaveLength(1)
+    await expect(
+      payload.find({
+        collection: 'anonymization-requests',
+        overrideAccess: false,
+        user: regularUser,
+      }),
+    ).rejects.toThrow()
+    await expect(
+      payload.update({
+        collection: 'anonymization-requests',
+        data: { status: 'rejected' },
+        id: request.id,
+        overrideAccess: false,
+        user: regularUser,
+      }),
+    ).rejects.toThrow()
   })
+
 })
