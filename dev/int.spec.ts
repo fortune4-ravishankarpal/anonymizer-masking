@@ -146,6 +146,41 @@ describe('Plugin integration tests', () => {
         transactions: ['privateNote'],
       }),
     })
+
+    const metadataRecords = await payload.find({
+      collection: 'anonymization-metadata',
+      where: { identity: { equals: completedRequest.anonymizedRecord as string } },
+      limit: 1,
+      overrideAccess: true,
+    })
+    expect(metadataRecords.docs).toHaveLength(1)
+    expect(metadataRecords.docs[0].encryptedData).toMatchObject({
+      algorithm: 'aes-256-gcm',
+      authTag: expect.any(String),
+      ciphertext: expect.any(String),
+      iv: expect.any(String),
+    })
+
+    await expect(
+      payload.find({
+        collection: 'anonymization-metadata',
+        where: { identity: { equals: completedRequest.anonymizedRecord as string } },
+        limit: 1,
+        overrideAccess: false,
+        user: admin,
+      }),
+    ).rejects.toThrow()
+
+    await expect(
+      payload.create({
+        collection: 'anonymization-metadata',
+        data: {
+          encryptedData: metadataRecords.docs[0].encryptedData,
+          identity: completedRequest.anonymizedRecord as string,
+        },
+        overrideAccess: true,
+      }),
+    ).rejects.toThrow()
   })
 
   test('only admins can read anonymization requests', async () => {

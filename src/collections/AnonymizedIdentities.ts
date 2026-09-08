@@ -26,6 +26,11 @@ export const AnonymizedIdentities: CollectionConfig = {
     {
       name: 'maskedAt',
       type: 'date',
+      admin: {
+        date: {
+          pickerAppearance: 'dayAndTime',
+        },
+      },
     },
     {
       name: 'maskedFields',

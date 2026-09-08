@@ -36,10 +36,20 @@ export const AnonymizationLogs: CollectionConfig = {
             name: 'startedAt',
             type: 'date',
             required: true,
+            admin: {
+                date: {
+                    pickerAppearance: 'dayAndTime',
+                },
+            },
         },
         {
             name: 'completedAt',
             type: 'date',
+            admin: {
+                date: {
+                    pickerAppearance: 'dayAndTime',
+                },
+            },
         },
         {
             name: 'durationMs',

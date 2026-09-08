@@ -125,6 +125,34 @@ can be literals or functions receiving the generated `anonymousId`. The
 identity record stores the user ID, affected collections, documents, and
 masked field names.
 
+Configure encrypted snapshot storage explicitly. The key must be a 32-byte
+base64 value or a 64-character hexadecimal value and should come from a secret
+environment variable:
+
+```ts
+anonymizerMasking({
+  metadata: {
+    enabled: true,
+    encryptionKey: process.env.ANONYMIZER_METADATA_KEY!,
+  },
+  collections: {
+    // masking policies
+  },
+})
+```
+
+Metadata storage is disabled by default. When `metadata` is omitted or
+`enabled: false`, the `anonymization-metadata` and `anonymization-key`
+collections are not registered, and no database key fragment or encrypted
+metadata row is created.
+
+The pre-mask snapshot is encrypted with AES-256-GCM before it is saved in the
+hidden `anonymization-metadata` collection. The collection is not available in
+the admin panel, denies reads and updates, allows one record per identity, and
+does not allow deletion. Keep both the environment key and database key
+fragment protected; losing either means the stored snapshots cannot be
+decrypted.
+
 Every run also creates an `anonymization-logs` record. It records the run
 status, anonymous ID, start and completion timestamps, collection and document
 counts, per-collection results, and the error message when a run fails.
@@ -132,6 +160,14 @@ Masking operations use the Payload request transaction: a processing error
 rolls back the masking and approval, while the failure log is persisted
 separately for diagnosis. The request remains `pending` so an administrator can
 correct the configuration or data and retry.
+
+On successful completion, `anonymized-identities.metadata` stores the complete
+pre-mask JSON snapshot for every configured collection and document. The
+`metadata` and `internal` fields are hidden in the admin UI and have field-level
+read access disabled; internal server code can access them only with explicit
+`overrideAccess: true`. `startedAt`, `completedAt`, and `maskedAt` are Payload
+date fields, so they retain the full timestamp, while the admin picker displays
+both date and time.
 
 You may wish to add collections or expand the test project depending on the purpose of your plugin. Just make sure to keep this dev environment as simplified as possible - users should be able to install your plugin without additional configuration required.
 

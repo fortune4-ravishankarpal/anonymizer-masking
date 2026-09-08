@@ -2,7 +2,12 @@ import { randomUUID } from 'node:crypto'
 
 import type { CollectionAfterChangeHook, CollectionSlug } from 'payload'
 
-import type { AnonymizationCollectionConfig, AnonymizationValue } from '../index.js'
+import type {
+  AnonymizationCollectionConfig,
+  AnonymizationMetadataConfig,
+  AnonymizationValue,
+} from '../index.js'
+import { deriveMetadataKey, encryptMetadata } from '../utils/encryptMetadata.js'
 
 type AnonymizationRequest = {
   id: string
@@ -18,6 +23,7 @@ const getErrorMessage = (error: unknown): string =>
 
 export const createAnonymizeApprovedRequest = (
   configuredCollections: Record<string, AnonymizationCollectionConfig>,
+  metadataConfig?: AnonymizationMetadataConfig,
 ): CollectionAfterChangeHook<AnonymizationRequest> => async ({
   context,
   doc,
@@ -36,6 +42,7 @@ export const createAnonymizeApprovedRequest = (
     const maskedFields: Record<string, string[]> = {}
     const processedRecords: Array<{ collection: string; id: string }> = []
     const collectionResults: Array<{ collection: string; documentsMasked: number; fields: string[] }> = []
+    const originalData: Record<string, Array<{ id: string; data: unknown }>> = {}
     let transactionID: string | number | null | undefined
     let ownsTransaction = false
     let logId: string | number | undefined
@@ -57,6 +64,24 @@ export const createAnonymizeApprovedRequest = (
       }
 
       const transactionReq = requestTransactionID != null ? req : { transactionID }
+      const metadataEnabled = metadataConfig?.enabled === true
+      let metadataEncryptionKey: string | undefined
+
+      if (metadataEnabled) {
+        const databaseKeyResult = await req.payload.find({
+          collection: 'anonymization-key',
+          limit: 1,
+          overrideAccess: true,
+          req: transactionReq,
+        })
+        const databaseKey = String(databaseKeyResult.docs[0]?.keyFragment || '')
+
+        if (!databaseKey || !metadataConfig.encryptionKey) {
+          throw new Error('Anonymization metadata encryption key is not initialized')
+        }
+
+        metadataEncryptionKey = deriveMetadataKey(metadataConfig.encryptionKey, databaseKey)
+      }
       const startedLog = await req.payload.create({
         collection: 'anonymization-logs',
         data: {
@@ -90,6 +115,10 @@ export const createAnonymizeApprovedRequest = (
         )
         const fields = Object.keys(collectionConfig.fields)
         maskedFields[collection] = fields
+        originalData[collection] = collectionDocuments.docs.map((collectionDocument) => ({
+          data: collectionDocument,
+          id: String(collectionDocument.id),
+        }))
 
         for (const collectionDocument of collectionDocuments.docs) {
           await req.payload.update({
@@ -120,10 +149,26 @@ export const createAnonymizeApprovedRequest = (
             collections: maskedFields,
             records: processedRecords,
           },
+          internal: true,
         },
         overrideAccess: true,
         req: transactionReq,
       })
+
+      if (metadataEnabled && metadataEncryptionKey) {
+        await req.payload.create({
+          collection: 'anonymization-metadata',
+          data: {
+            encryptedData: encryptMetadata(
+              { capturedAt: new Date().toISOString(), collections: originalData },
+              metadataEncryptionKey,
+            ),
+            identity: anonymizedRecord.id,
+          },
+          overrideAccess: true,
+          req: transactionReq,
+        })
+      }
 
       await req.payload.update({
         collection: 'anonymization-requests',

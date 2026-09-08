@@ -76,6 +76,8 @@ export interface Config {
     'anonymization-requests': AnonymizationRequest;
     'anonymized-identities': AnonymizedIdentity;
     'anonymization-logs': AnonymizationLog;
+    'anonymization-key': AnonymizationKey;
+    'anonymization-metadata': AnonymizationMetadatum;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -92,6 +94,8 @@ export interface Config {
     'anonymization-requests': AnonymizationRequestsSelect<false> | AnonymizationRequestsSelect<true>;
     'anonymized-identities': AnonymizedIdentitiesSelect<false> | AnonymizedIdentitiesSelect<true>;
     'anonymization-logs': AnonymizationLogsSelect<false> | AnonymizationLogsSelect<true>;
+    'anonymization-key': AnonymizationKeySelect<false> | AnonymizationKeySelect<true>;
+    'anonymization-metadata': AnonymizationMetadataSelect<false> | AnonymizationMetadataSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -292,6 +296,35 @@ export interface AnonymizationLog {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "anonymization-key".
+ */
+export interface AnonymizationKey {
+  id: number;
+  keyFragment: string;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "anonymization-metadata".
+ */
+export interface AnonymizationMetadatum {
+  id: number;
+  identity: number | AnonymizedIdentity;
+  encryptedData:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -349,6 +382,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'anonymization-logs';
         value: number | AnonymizationLog;
+      } | null)
+    | ({
+        relationTo: 'anonymization-key';
+        value: number | AnonymizationKey;
+      } | null)
+    | ({
+        relationTo: 'anonymization-metadata';
+        value: number | AnonymizationMetadatum;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -521,6 +562,25 @@ export interface AnonymizationLogsSelect<T extends boolean = true> {
   totalDocuments?: T;
   collectionResults?: T;
   errorMessage?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "anonymization-key_select".
+ */
+export interface AnonymizationKeySelect<T extends boolean = true> {
+  keyFragment?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "anonymization-metadata_select".
+ */
+export interface AnonymizationMetadataSelect<T extends boolean = true> {
+  identity?: T;
+  encryptedData?: T;
   updatedAt?: T;
   createdAt?: T;
 }
