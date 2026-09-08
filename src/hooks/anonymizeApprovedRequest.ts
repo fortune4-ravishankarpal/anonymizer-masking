@@ -25,6 +25,7 @@ export const createAnonymizeApprovedRequest = (
   req,
 }) => {
     if (context.anonymizationInProgress || doc.status !== 'approved' || previousDoc?.status !== 'pending') {
+
       return doc
     }
 
@@ -36,16 +37,26 @@ export const createAnonymizeApprovedRequest = (
     const processedRecords: Array<{ collection: string; id: string }> = []
     const collectionResults: Array<{ collection: string; documentsMasked: number; fields: string[] }> = []
     let transactionID: string | number | null | undefined
+    let ownsTransaction = false
     let logId: string | number | undefined
 
     try {
-      transactionID = await req.payload.db.beginTransaction()
+      const requestTransactionID = req.transactionID instanceof Promise
+        ? await req.transactionID
+        : req.transactionID
+
+      if (requestTransactionID != null) {
+        transactionID = requestTransactionID
+      } else {
+        transactionID = await req.payload.db.beginTransaction()
+        ownsTransaction = true
+      }
 
       if (transactionID == null) {
         throw new Error('Payload database adapter did not return a transaction ID')
       }
 
-      const transactionReq = { transactionID }
+      const transactionReq = requestTransactionID != null ? req : { transactionID }
       const startedLog = await req.payload.create({
         collection: 'anonymization-logs',
         data: {
@@ -144,14 +155,16 @@ export const createAnonymizeApprovedRequest = (
         req: transactionReq,
       })
 
-      await req.payload.db.commitTransaction(transactionID)
+      if (ownsTransaction) {
+        await req.payload.db.commitTransaction(transactionID)
+      }
 
       return doc
     } catch (error) {
       const errorMessage = getErrorMessage(error)
 
       try {
-        if (transactionID != null) {
+        if (ownsTransaction && transactionID != null) {
           await req.payload.db.rollbackTransaction(transactionID)
         }
 
