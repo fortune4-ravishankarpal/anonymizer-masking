@@ -6,8 +6,7 @@ import type { AnonymizationCollectionConfig, AnonymizationValue } from '../index
 
 type AnonymizationRequest = {
   id: string
-  targetCollection: string
-  targetDocId: string
+  user: string | { id: string }
   status: 'pending' | 'approved' | 'completed' | 'rejected'
 }
 
@@ -26,38 +25,54 @@ export const createAnonymizeApprovedRequest = (
       return doc
     }
 
-    const collectionConfig = configuredCollections[doc.targetCollection]
-
-    if (!collectionConfig) {
-      throw new Error(`No anonymization configuration found for ${doc.targetCollection}`)
-    }
-
     const anonymousId = randomUUID()
-    const maskedFields = Object.keys(collectionConfig.fields)
-    const maskedData = Object.fromEntries(
-      Object.entries(collectionConfig.fields).map(([fieldName, value]) => [
-        fieldName,
-        resolveValue(value, anonymousId),
-      ]),
-    )
+    const userId = typeof doc.user === 'string' ? doc.user : doc.user.id
+    const maskedFields: Record<string, string[]> = {}
+    const processedRecords: Array<{ collection: string; id: string }> = []
+
+    for (const [collection, collectionConfig] of Object.entries(configuredCollections)) {
+      const collectionDocuments = await req.payload.find({
+        collection: collection as CollectionSlug,
+        pagination: false,
+        overrideAccess: true,
+        req,
+        where: {
+          [collectionConfig.userField]: { equals: userId },
+        },
+      })
+
+      const maskedData = Object.fromEntries(
+        Object.entries(collectionConfig.fields).map(([fieldName, value]) => [
+          fieldName,
+          resolveValue(value, anonymousId),
+        ]),
+      )
+      maskedFields[collection] = Object.keys(collectionConfig.fields)
+
+      for (const collectionDocument of collectionDocuments.docs) {
+        await req.payload.update({
+          collection: collection as CollectionSlug,
+          data: maskedData,
+          id: collectionDocument.id,
+          overrideAccess: true,
+          req,
+        })
+        processedRecords.push({ collection, id: String(collectionDocument.id) })
+      }
+    }
 
     const anonymizedRecord = await req.payload.create({
       collection: 'anonymized-identities',
       data: {
         anonymousId,
-        originalDocId: doc.targetDocId,
-        originalCollection: doc.targetCollection,
+        originalDocId: userId,
+        originalCollection: 'users',
         maskedAt: new Date().toISOString(),
-        maskedFields,
+        maskedFields: {
+          collections: maskedFields,
+          records: processedRecords,
+        },
       },
-      overrideAccess: true,
-      req,
-    })
-
-    await req.payload.update({
-      collection: doc.targetCollection as CollectionSlug,
-      data: maskedData,
-      id: doc.targetDocId,
       overrideAccess: true,
       req,
     })

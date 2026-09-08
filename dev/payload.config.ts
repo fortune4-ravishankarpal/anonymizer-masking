@@ -29,6 +29,9 @@ export default buildConfig({
       slug: 'users',
       auth: true,
       fields: [
+        { name: 'name', type: 'text' },
+        { name: 'phone', type: 'text' },
+        { name: 'address', type: 'text' },
         {
           name: 'roles',
           type: 'select',
@@ -40,13 +43,31 @@ export default buildConfig({
       ],
     },
     {
-      slug: 'customers',
+      slug: 'user-addresses',
       fields: [
-        { name: 'name', type: 'text' },
-        { name: 'email', type: 'email' },
-        { name: 'phone', type: 'text' },
-        { name: 'address', type: 'text' },
-        { name: 'isAnonymized', type: 'checkbox' },
+        { name: 'user', type: 'relationship', relationTo: 'users', required: true },
+        { name: 'addressLine1', type: 'text' },
+        { name: 'city', type: 'text' },
+        { name: 'postalCode', type: 'text' },
+      ],
+    },
+    {
+      slug: 'user-credit-cards',
+      fields: [
+        { name: 'user', type: 'relationship', relationTo: 'users', required: true },
+        { name: 'cardholderName', type: 'text' },
+        { name: 'cardNumber', type: 'text' },
+        { name: 'expiry', type: 'text' },
+        { name: 'cvv', type: 'text' },
+      ],
+    },
+    {
+      slug: 'transactions',
+      fields: [
+        { name: 'user', type: 'relationship', relationTo: 'users', required: true },
+        { name: 'paymentMethod', type: 'text' },
+        { name: 'amount', type: 'number' },
+        { name: 'privateNote', type: 'text' },
       ],
     },
     {
@@ -74,13 +95,36 @@ export default buildConfig({
   plugins: [
     anonymizerMasking({
       collections: {
-        customers: {
+        users: {
+          userField: 'id',
           fields: {
             address: null,
             email: ({ anonymousId }) => `anon-${anonymousId}@anonymized.local`,
-            isAnonymized: true,
-            name: 'Anonymized User',
+            name: ({ anonymousId }) => `Anonymous User ${anonymousId.slice(0, 8)}`,
             phone: null,
+          },
+        },
+        'user-addresses': {
+          userField: 'user',
+          fields: {
+            addressLine1: null,
+            city: null,
+            postalCode: null,
+          },
+        },
+        'user-credit-cards': {
+          userField: 'user',
+          fields: {
+            cardNumber: '0000000000000000',
+            cardholderName: 'Anonymous User',
+            cvv: null,
+            expiry: null,
+          },
+        },
+        transactions: {
+          userField: 'user',
+          fields: {
+            privateNote: null,
           },
         },
       },

@@ -91,16 +91,39 @@ Later when you rename the plugin or add additional options, **make sure to updat
 ### Data Anonymization Workflow
 
 This plugin registers `anonymization-requests` and `anonymized-identities`.
-Requests can target `users`, `customers`, or `orders`. An authenticated user can
-create a pending request, but only a user whose `roles` field contains `admin`
-can read or update requests. When an admin changes a request from `pending` to
-`approved`, the plugin creates an identity mapping, masks the target document's
-`name`, `email`, `phone`, and `address` fields, sets `isAnonymized` to `true`,
-and marks the request `completed`.
+An authenticated user can create a pending request for a `user`, but only a
+user whose `roles` field contains `admin` can read or update requests. When an
+admin changes a request from `pending` to `approved`, the plugin creates one
+anonymous ID and processes every configured collection related to that user.
 
-The target collection must expose the fields used by the masking policy. The
-default email value is `anon-{anonymousId}@anonymized.local`; the generated
-`anonymousId` is a UUID stored in `anonymized-identities`.
+Configure the relation field and exact fields to replace for every collection:
+
+```ts
+anonymizerMasking({
+  collections: {
+    users: {
+      userField: 'id',
+      fields: {
+        name: ({ anonymousId }) => `Anonymous User ${anonymousId.slice(0, 8)}`,
+        email: ({ anonymousId }) => `anon-${anonymousId}@anonymized.local`,
+        phone: null,
+      },
+    },
+    transactions: {
+      userField: 'user',
+      fields: {
+        privateNote: null,
+        // amount and paymentMethod are intentionally not listed and stay unchanged
+      },
+    },
+  },
+})
+```
+
+The target collections must expose the configured relation and fields. Values
+can be literals or functions receiving the generated `anonymousId`. The
+identity record stores the user ID, affected collections, documents, and
+masked field names.
 
 You may wish to add collections or expand the test project depending on the purpose of your plugin. Just make sure to keep this dev environment as simplified as possible - users should be able to install your plugin without additional configuration required.
 

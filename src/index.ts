@@ -12,6 +12,7 @@ export type AnonymizationValue =
   | ((context: { anonymousId: string }) => unknown)
 
 export type AnonymizationCollectionConfig = {
+  userField: string
   fields: Record<string, AnonymizationValue>
 }
 
@@ -23,30 +24,19 @@ export type AnonymizerMaskingConfig = {
 export const anonymizerMasking =
   (pluginOptions: AnonymizerMaskingConfig) =>
     (config: Config): Config => {
-      const configuredCollections = Object.keys(pluginOptions.collections)
-
-      if (configuredCollections.length === 0) {
+      if (Object.keys(pluginOptions.collections).length === 0) {
         throw new Error('anonymizerMasking requires at least one configured collection')
       }
 
-      config.collections = [
-        ...(config.collections || []),
-        AnonymizationRequests,
-        AnonymizedIdentities,
-      ]
-
-      AnonymizationRequests.fields = AnonymizationRequests.fields.map((field) => {
-        if (field.name !== 'targetCollection' || field.type !== 'select') return field
-
-        return { ...field, options: configuredCollections }
-      })
-
-      if (pluginOptions.disabled) return config
-
-      AnonymizationRequests.hooks = {
-        ...AnonymizationRequests.hooks,
-        afterChange: [createAnonymizeApprovedRequest(pluginOptions.collections)],
+      if (!pluginOptions.disabled) {
+        AnonymizationRequests.hooks = {
+          afterChange: [createAnonymizeApprovedRequest(pluginOptions.collections)],
+        }
       }
+
+      if (!config.collections) config.collections = []
+
+      config.collections.push(AnonymizationRequests, AnonymizedIdentities)
 
       return config
     }

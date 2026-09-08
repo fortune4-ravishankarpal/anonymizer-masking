@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest'
 let payload: Payload
 
 afterAll(async () => {
-  await payload.destroy()
+  if (payload) await payload.destroy()
 })
 
 beforeAll(async () => {
@@ -15,18 +15,37 @@ beforeAll(async () => {
 })
 
 describe('Plugin integration tests', () => {
-  test('anonymizes an approved customer request', async () => {
+  test('anonymizes a user and related private records', async () => {
     const admin = await payload.findByID({
       collection: 'users',
       id: (await payload.find({ collection: 'users', limit: 1 })).docs[0].id,
     })
-    const customer = await payload.create({
-      collection: 'customers',
+    const address = await payload.create({
+      collection: 'user-addresses',
       data: {
-        address: '123 Example Street',
-        email: 'person@example.com',
-        name: 'Private Person',
-        phone: '555-0100',
+        addressLine1: '123 Example Street',
+        city: 'Private City',
+        postalCode: '12345',
+        user: admin.id,
+      },
+    })
+    const creditCard = await payload.create({
+      collection: 'user-credit-cards',
+      data: {
+        cardNumber: '4111111111111111',
+        cardholderName: 'Private Person',
+        cvv: '123',
+        expiry: '12/30',
+        user: admin.id,
+      },
+    })
+    const transaction = await payload.create({
+      collection: 'transactions',
+      data: {
+        amount: 125.5,
+        paymentMethod: 'card',
+        privateNote: 'Private purchase note',
+        user: admin.id,
       },
     })
 
@@ -34,8 +53,7 @@ describe('Plugin integration tests', () => {
       collection: 'anonymization-requests',
       data: {
         requestedBy: admin.id,
-        targetCollection: 'customers',
-        targetDocId: customer.id,
+        user: admin.id,
       },
       overrideAccess: false,
       user: admin,
@@ -49,9 +67,21 @@ describe('Plugin integration tests', () => {
       user: admin,
     })
 
-    const anonymizedCustomer = await payload.findByID({
-      collection: 'customers',
-      id: customer.id,
+    const anonymizedUser = await payload.findByID({
+      collection: 'users',
+      id: admin.id,
+    })
+    const anonymizedAddress = await payload.findByID({
+      collection: 'user-addresses',
+      id: address.id,
+    })
+    const anonymizedCreditCard = await payload.findByID({
+      collection: 'user-credit-cards',
+      id: creditCard.id,
+    })
+    const preservedTransaction = await payload.findByID({
+      collection: 'transactions',
+      id: transaction.id,
     })
     const completedRequest = await payload.findByID({
       collection: 'anonymization-requests',
@@ -59,12 +89,26 @@ describe('Plugin integration tests', () => {
       depth: 0,
     })
 
-    expect(anonymizedCustomer).toMatchObject({
-      address: null,
+    expect(anonymizedUser).toMatchObject({
       email: expect.stringMatching(/^anon-[0-9a-f-]+@anonymized\.local$/),
-      isAnonymized: true,
-      name: 'Anonymized User',
+      name: expect.stringMatching(/^Anonymous User [0-9a-f]{8}$/),
       phone: null,
+    })
+    expect(anonymizedAddress).toMatchObject({
+      addressLine1: null,
+      city: null,
+      postalCode: null,
+    })
+    expect(anonymizedCreditCard).toMatchObject({
+      cardNumber: '0000000000000000',
+      cardholderName: 'Anonymous User',
+      cvv: null,
+      expiry: null,
+    })
+    expect(preservedTransaction).toMatchObject({
+      amount: 125.5,
+      paymentMethod: 'card',
+      privateNote: null,
     })
     expect(completedRequest.status).toBe('completed')
     expect(completedRequest.approvedBy).toBe(admin.id)
@@ -75,9 +119,12 @@ describe('Plugin integration tests', () => {
       id: completedRequest.anonymizedRecord as string,
     })
     expect(identity).toMatchObject({
-      originalCollection: 'customers',
-      originalDocId: customer.id,
-      maskedFields: ['name', 'email', 'phone', 'address', 'isAnonymized'],
+      originalCollection: 'users',
+      originalDocId: admin.id,
+      maskedFields: expect.objectContaining({
+        users: ['name', 'email', 'phone', 'address'],
+        transactions: ['privateNote'],
+      }),
     })
   })
 
@@ -94,8 +141,7 @@ describe('Plugin integration tests', () => {
       collection: 'anonymization-requests',
       data: {
         requestedBy: regularUser.id,
-        targetCollection: 'customers',
-        targetDocId: 'not-a-real-customer',
+        user: regularUser.id,
       },
       overrideAccess: true,
     })
