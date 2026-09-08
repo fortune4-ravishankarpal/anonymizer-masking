@@ -6,38 +6,108 @@
  * and re-run `payload generate:types` to regenerate this file.
  */
 
+/**
+ * Supported timezones in IANA format.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "supportedTimezones".
+ */
+export type SupportedTimezones =
+  | 'Pacific/Midway'
+  | 'Pacific/Niue'
+  | 'Pacific/Honolulu'
+  | 'Pacific/Rarotonga'
+  | 'America/Anchorage'
+  | 'Pacific/Gambier'
+  | 'America/Los_Angeles'
+  | 'America/Tijuana'
+  | 'America/Denver'
+  | 'America/Phoenix'
+  | 'America/Chicago'
+  | 'America/Guatemala'
+  | 'America/New_York'
+  | 'America/Bogota'
+  | 'America/Caracas'
+  | 'America/Santiago'
+  | 'America/Buenos_Aires'
+  | 'America/Sao_Paulo'
+  | 'Atlantic/South_Georgia'
+  | 'Atlantic/Azores'
+  | 'Atlantic/Cape_Verde'
+  | 'Europe/London'
+  | 'Europe/Berlin'
+  | 'Africa/Lagos'
+  | 'Europe/Athens'
+  | 'Africa/Cairo'
+  | 'Europe/Moscow'
+  | 'Asia/Riyadh'
+  | 'Asia/Dubai'
+  | 'Asia/Baku'
+  | 'Asia/Karachi'
+  | 'Asia/Tashkent'
+  | 'Asia/Calcutta'
+  | 'Asia/Dhaka'
+  | 'Asia/Almaty'
+  | 'Asia/Jakarta'
+  | 'Asia/Bangkok'
+  | 'Asia/Shanghai'
+  | 'Asia/Singapore'
+  | 'Asia/Tokyo'
+  | 'Asia/Seoul'
+  | 'Australia/Brisbane'
+  | 'Australia/Sydney'
+  | 'Pacific/Guam'
+  | 'Pacific/Noumea'
+  | 'Pacific/Auckland'
+  | 'Pacific/Fiji';
+
 export interface Config {
   auth: {
     users: UserAuthOperations;
   };
+  blocks: {};
   collections: {
+    users: User;
+    'user-addresses': UserAddress;
+    'user-credit-cards': UserCreditCard;
+    transactions: Transaction;
     posts: Post;
     media: Media;
-    'plugin-collection': PluginCollection;
-    users: User;
+    'anonymization-requests': AnonymizationRequest;
+    'anonymized-identities': AnonymizedIdentity;
+    'anonymization-logs': AnonymizationLog;
+    'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
     'payload-migrations': PayloadMigration;
   };
   collectionsJoins: {};
   collectionsSelect: {
+    users: UsersSelect<false> | UsersSelect<true>;
+    'user-addresses': UserAddressesSelect<false> | UserAddressesSelect<true>;
+    'user-credit-cards': UserCreditCardsSelect<false> | UserCreditCardsSelect<true>;
+    transactions: TransactionsSelect<false> | TransactionsSelect<true>;
     posts: PostsSelect<false> | PostsSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
-    'plugin-collection': PluginCollectionSelect<false> | PluginCollectionSelect<true>;
-    users: UsersSelect<false> | UsersSelect<true>;
+    'anonymization-requests': AnonymizationRequestsSelect<false> | AnonymizationRequestsSelect<true>;
+    'anonymized-identities': AnonymizedIdentitiesSelect<false> | AnonymizedIdentitiesSelect<true>;
+    'anonymization-logs': AnonymizationLogsSelect<false> | AnonymizationLogsSelect<true>;
+    'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
     'payload-migrations': PayloadMigrationsSelect<false> | PayloadMigrationsSelect<true>;
   };
   db: {
-    defaultIDType: string;
+    defaultIDType: number;
   };
+  fallbackLocale: null;
   globals: {};
   globalsSelect: {};
   locale: null;
-  user: User & {
-    collection: 'users';
+  widgets: {
+    collections: CollectionsWidget;
   };
+  user: User;
   jobs: {
     tasks: unknown;
     workflows: unknown;
@@ -63,11 +133,79 @@ export interface UserAuthOperations {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "users".
+ */
+export interface User {
+  id: number;
+  name?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  roles?: ('admin' | 'user')[] | null;
+  updatedAt: string;
+  createdAt: string;
+  email: string;
+  resetPasswordToken?: string | null;
+  resetPasswordExpiration?: string | null;
+  salt?: string | null;
+  hash?: string | null;
+  loginAttempts?: number | null;
+  lockUntil?: string | null;
+  sessions?:
+    | {
+        id: string;
+        createdAt?: string | null;
+        expiresAt: string;
+      }[]
+    | null;
+  password?: string | null;
+  collection: 'users';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "user-addresses".
+ */
+export interface UserAddress {
+  id: number;
+  user: number | User;
+  addressLine1?: string | null;
+  city?: string | null;
+  postalCode?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "user-credit-cards".
+ */
+export interface UserCreditCard {
+  id: number;
+  user: number | User;
+  cardholderName?: string | null;
+  cardNumber?: string | null;
+  expiry?: string | null;
+  cvv?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "transactions".
+ */
+export interface Transaction {
+  id: number;
+  user: number | User;
+  paymentMethod?: string | null;
+  amount?: number | null;
+  privateNote?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "posts".
  */
 export interface Post {
-  id: string;
-  addedByPlugin?: string | null;
+  id: number;
   updatedAt: string;
   createdAt: string;
 }
@@ -76,7 +214,7 @@ export interface Post {
  * via the `definition` "media".
  */
 export interface Media {
-  id: string;
+  id: number;
   updatedAt: string;
   createdAt: string;
   url?: string | null;
@@ -91,57 +229,131 @@ export interface Media {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "plugin-collection".
+ * via the `definition` "anonymization-requests".
  */
-export interface PluginCollection {
-  id: string;
+export interface AnonymizationRequest {
+  id: number;
+  user: number | User;
+  requestedBy?: (number | null) | User;
+  status: 'pending' | 'approved' | 'completed' | 'rejected';
+  approvedBy?: (number | null) | User;
+  anonymizedRecord?: (number | null) | AnonymizedIdentity;
   updatedAt: string;
   createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "users".
+ * via the `definition` "anonymized-identities".
  */
-export interface User {
-  id: string;
+export interface AnonymizedIdentity {
+  id: number;
+  anonymousId: string;
+  originalDocId: string;
+  originalCollection: string;
+  maskedAt?: string | null;
+  maskedFields?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   updatedAt: string;
   createdAt: string;
-  email: string;
-  resetPasswordToken?: string | null;
-  resetPasswordExpiration?: string | null;
-  salt?: string | null;
-  hash?: string | null;
-  loginAttempts?: number | null;
-  lockUntil?: string | null;
-  password?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "anonymization-logs".
+ */
+export interface AnonymizationLog {
+  id: number;
+  request: number | AnonymizationRequest;
+  status: 'started' | 'completed' | 'failed';
+  anonymousId?: string | null;
+  startedAt: string;
+  completedAt?: string | null;
+  durationMs?: number | null;
+  totalCollections?: number | null;
+  totalDocuments?: number | null;
+  collectionResults?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  errorMessage?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-kv".
+ */
+export interface PayloadKv {
+  id: number;
+  key: string;
+  data:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-locked-documents".
  */
 export interface PayloadLockedDocument {
-  id: string;
+  id: number;
   document?:
     | ({
+        relationTo: 'users';
+        value: number | User;
+      } | null)
+    | ({
+        relationTo: 'user-addresses';
+        value: number | UserAddress;
+      } | null)
+    | ({
+        relationTo: 'user-credit-cards';
+        value: number | UserCreditCard;
+      } | null)
+    | ({
+        relationTo: 'transactions';
+        value: number | Transaction;
+      } | null)
+    | ({
         relationTo: 'posts';
-        value: string | Post;
+        value: number | Post;
       } | null)
     | ({
         relationTo: 'media';
-        value: string | Media;
+        value: number | Media;
       } | null)
     | ({
-        relationTo: 'plugin-collection';
-        value: string | PluginCollection;
+        relationTo: 'anonymization-requests';
+        value: number | AnonymizationRequest;
       } | null)
     | ({
-        relationTo: 'users';
-        value: string | User;
+        relationTo: 'anonymized-identities';
+        value: number | AnonymizedIdentity;
+      } | null)
+    | ({
+        relationTo: 'anonymization-logs';
+        value: number | AnonymizationLog;
       } | null);
   globalSlug?: string | null;
   user: {
     relationTo: 'users';
-    value: string | User;
+    value: number | User;
   };
   updatedAt: string;
   createdAt: string;
@@ -151,10 +363,10 @@ export interface PayloadLockedDocument {
  * via the `definition` "payload-preferences".
  */
 export interface PayloadPreference {
-  id: string;
+  id: number;
   user: {
     relationTo: 'users';
-    value: string | User;
+    value: number | User;
   };
   key?: string | null;
   value?:
@@ -174,7 +386,7 @@ export interface PayloadPreference {
  * via the `definition` "payload-migrations".
  */
 export interface PayloadMigration {
-  id: string;
+  id: number;
   name?: string | null;
   batch?: number | null;
   updatedAt: string;
@@ -182,10 +394,72 @@ export interface PayloadMigration {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "users_select".
+ */
+export interface UsersSelect<T extends boolean = true> {
+  name?: T;
+  phone?: T;
+  address?: T;
+  roles?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  email?: T;
+  resetPasswordToken?: T;
+  resetPasswordExpiration?: T;
+  salt?: T;
+  hash?: T;
+  loginAttempts?: T;
+  lockUntil?: T;
+  sessions?:
+    | T
+    | {
+        id?: T;
+        createdAt?: T;
+        expiresAt?: T;
+      };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "user-addresses_select".
+ */
+export interface UserAddressesSelect<T extends boolean = true> {
+  user?: T;
+  addressLine1?: T;
+  city?: T;
+  postalCode?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "user-credit-cards_select".
+ */
+export interface UserCreditCardsSelect<T extends boolean = true> {
+  user?: T;
+  cardholderName?: T;
+  cardNumber?: T;
+  expiry?: T;
+  cvv?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "transactions_select".
+ */
+export interface TransactionsSelect<T extends boolean = true> {
+  user?: T;
+  paymentMethod?: T;
+  amount?: T;
+  privateNote?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "posts_select".
  */
 export interface PostsSelect<T extends boolean = true> {
-  addedByPlugin?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -208,27 +482,55 @@ export interface MediaSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "plugin-collection_select".
+ * via the `definition` "anonymization-requests_select".
  */
-export interface PluginCollectionSelect<T extends boolean = true> {
-  id?: T;
+export interface AnonymizationRequestsSelect<T extends boolean = true> {
+  user?: T;
+  requestedBy?: T;
+  status?: T;
+  approvedBy?: T;
+  anonymizedRecord?: T;
   updatedAt?: T;
   createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "users_select".
+ * via the `definition` "anonymized-identities_select".
  */
-export interface UsersSelect<T extends boolean = true> {
+export interface AnonymizedIdentitiesSelect<T extends boolean = true> {
+  anonymousId?: T;
+  originalDocId?: T;
+  originalCollection?: T;
+  maskedAt?: T;
+  maskedFields?: T;
   updatedAt?: T;
   createdAt?: T;
-  email?: T;
-  resetPasswordToken?: T;
-  resetPasswordExpiration?: T;
-  salt?: T;
-  hash?: T;
-  loginAttempts?: T;
-  lockUntil?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "anonymization-logs_select".
+ */
+export interface AnonymizationLogsSelect<T extends boolean = true> {
+  request?: T;
+  status?: T;
+  anonymousId?: T;
+  startedAt?: T;
+  completedAt?: T;
+  durationMs?: T;
+  totalCollections?: T;
+  totalDocuments?: T;
+  collectionResults?: T;
+  errorMessage?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-kv_select".
+ */
+export interface PayloadKvSelect<T extends boolean = true> {
+  key?: T;
+  data?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -261,6 +563,16 @@ export interface PayloadMigrationsSelect<T extends boolean = true> {
   batch?: T;
   updatedAt?: T;
   createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "collections_widget".
+ */
+export interface CollectionsWidget {
+  data?: {
+    [k: string]: unknown;
+  };
+  width: 'full';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

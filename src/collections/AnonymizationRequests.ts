@@ -45,4 +45,7 @@ export const AnonymizationRequests: CollectionConfig = {
             relationTo: 'anonymized-identities',
         },
     ],
+    hooks: {
+        afterChange: [],
+    },
 }

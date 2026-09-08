@@ -114,6 +114,26 @@ describe('Plugin integration tests', () => {
     expect(completedRequest.approvedBy).toBe(admin.id)
     expect(completedRequest.anonymizedRecord).toBeTruthy()
 
+    const { docs: logs } = await payload.find({
+      collection: 'anonymization-logs',
+      where: { request: { equals: request.id } },
+      depth: 0,
+    })
+    expect(logs).toHaveLength(1)
+    expect(logs[0]).toMatchObject({
+      status: 'completed',
+      totalCollections: 4,
+      totalDocuments: 4,
+    })
+    expect(logs[0].durationMs).toEqual(expect.any(Number))
+    expect(logs[0].durationMs).toBeGreaterThanOrEqual(0)
+    expect(logs[0].collectionResults).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ collection: 'transactions', documentsMasked: 1 }),
+        expect.objectContaining({ collection: 'user-credit-cards', documentsMasked: 1 }),
+      ]),
+    )
+
     const identity = await payload.findByID({
       collection: 'anonymized-identities',
       id: completedRequest.anonymizedRecord as string,

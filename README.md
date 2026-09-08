@@ -125,6 +125,14 @@ can be literals or functions receiving the generated `anonymousId`. The
 identity record stores the user ID, affected collections, documents, and
 masked field names.
 
+Every run also creates an `anonymization-logs` record. It records the run
+status, anonymous ID, start and completion timestamps, collection and document
+counts, per-collection results, and the error message when a run fails.
+Masking operations use the Payload request transaction: a processing error
+rolls back the masking and approval, while the failure log is persisted
+separately for diagnosis. The request remains `pending` so an administrator can
+correct the configuration or data and retry.
+
 You may wish to add collections or expand the test project depending on the purpose of your plugin. Just make sure to keep this dev environment as simplified as possible - users should be able to install your plugin without additional configuration required.
 
 When you’re ready to start development, initiate the project with `pnpm/npm/yarn dev` and pull up [http://localhost:3000](http://localhost:3000) in your browser.
