@@ -122,8 +122,17 @@ export const createAnonymizeApprovedRequest = (
         const fields = Object.keys(collectionConfig.fields)
         maskedFields[collection] = fields
         originalData[collection] = collectionDocuments.docs.map((collectionDocument) => ({
-          data: collectionDocument,
           id: String(collectionDocument.id),
+          data: Object.fromEntries(
+            fields.map((fieldName) => {
+              const fieldValue = collectionDocument[fieldName as keyof typeof collectionDocument]
+              // If field is a populated relationship object, extract just the ID
+              if (fieldValue && typeof fieldValue === 'object' && 'id' in fieldValue) {
+                return [fieldName, fieldValue.id]
+              }
+              return [fieldName, fieldValue]
+            })
+          ),
         }))
 
         for (const collectionDocument of collectionDocuments.docs) {
