@@ -96,9 +96,6 @@ export default buildConfig({
     anonymizerMasking({
       metadata: {
         enabled: true,
-        encryptionKey:
-          process.env.ANONYMIZER_METADATA_KEY ||
-          '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
       },
       collections: {
         users: {

@@ -125,9 +125,24 @@ can be literals or functions receiving the generated `anonymousId`. The
 identity record stores the user ID, affected collections, documents, and
 masked field names.
 
-Configure encrypted snapshot storage explicitly. The key must be a 32-byte
-base64 value or a 64-character hexadecimal value and should come from a secret
-environment variable:
+Metadata storage is disabled by default. When `metadata` is omitted or
+`enabled: false`, no snapshot is stored.
+
+To store plaintext snapshots (no encryption):
+
+```ts
+anonymizerMasking({
+  metadata: {
+    enabled: true,
+  },
+  collections: {
+    // masking policies
+  },
+})
+```
+
+To encrypt snapshots with AES-256-GCM, provide an `encryptionKey` (32-byte
+base64 or 64-character hex):
 
 ```ts
 anonymizerMasking({
@@ -141,17 +156,12 @@ anonymizerMasking({
 })
 ```
 
-Metadata storage is disabled by default. When `metadata` is omitted or
-`enabled: false`, the `anonymization-metadata` and `anonymization-key`
-collections are not registered, and no database key fragment or encrypted
-metadata row is created.
-
-The pre-mask snapshot is encrypted with AES-256-GCM before it is saved in the
-hidden `anonymization-metadata` collection. The collection is not available in
-the admin panel, denies reads and updates, allows one record per identity, and
-does not allow deletion. Keep both the environment key and database key
-fragment protected; losing either means the stored snapshots cannot be
-decrypted.
+The pre-mask snapshot is stored in the hidden `anonymization-metadata`
+collection. It is encrypted only if `encryptionKey` is provided. The collection
+is not available in the admin panel, denies reads and updates, allows one record
+per identity, and does not allow deletion. When encryption is enabled, keep both
+the environment key and database key fragment protected; losing either means the
+stored snapshots cannot be decrypted.
 
 Every run also creates an `anonymization-logs` record. It records the run
 status, anonymous ID, start and completion timestamps, collection and document

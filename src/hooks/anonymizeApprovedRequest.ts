@@ -63,24 +63,30 @@ export const createAnonymizeApprovedRequest = (
         throw new Error('Payload database adapter did not return a transaction ID')
       }
 
+      console.log('transactionID :', requestTransactionID);
+
       const transactionReq = requestTransactionID != null ? req : { transactionID }
       const metadataEnabled = metadataConfig?.enabled === true
+      let shouldEncrypt = false
       let metadataEncryptionKey: string | undefined
 
       if (metadataEnabled) {
-        const databaseKeyResult = await req.payload.find({
-          collection: 'anonymization-key',
-          limit: 1,
-          overrideAccess: true,
-          req: transactionReq,
-        })
-        const databaseKey = String(databaseKeyResult.docs[0]?.keyFragment || '')
+        if (metadataConfig.encryptionKey) {
+          shouldEncrypt = true
+          const databaseKeyResult = await req.payload.find({
+            collection: 'anonymization-key',
+            limit: 1,
+            overrideAccess: true,
+            req: transactionReq,
+          })
+          const databaseKey = String(databaseKeyResult.docs[0]?.keyFragment || '')
 
-        if (!databaseKey || !metadataConfig.encryptionKey) {
-          throw new Error('Anonymization metadata encryption key is not initialized')
+          if (!databaseKey) {
+            throw new Error('Anonymization database key is not initialized')
+          }
+
+          metadataEncryptionKey = deriveMetadataKey(metadataConfig.encryptionKey, databaseKey)
         }
-
-        metadataEncryptionKey = deriveMetadataKey(metadataConfig.encryptionKey, databaseKey)
       }
       const startedLog = await req.payload.create({
         collection: 'anonymization-logs',
@@ -155,14 +161,16 @@ export const createAnonymizeApprovedRequest = (
         req: transactionReq,
       })
 
-      if (metadataEnabled && metadataEncryptionKey) {
+      if (metadataEnabled) {
         await req.payload.create({
           collection: 'anonymization-metadata',
           data: {
-            encryptedData: encryptMetadata(
-              { capturedAt: new Date().toISOString(), collections: originalData },
-              metadataEncryptionKey,
-            ),
+            encryptedData: shouldEncrypt && metadataEncryptionKey
+              ? encryptMetadata(
+                { capturedAt: new Date().toISOString(), collections: originalData },
+                metadataEncryptionKey,
+              )
+              : { capturedAt: new Date().toISOString(), collections: originalData },
             identity: anonymizedRecord.id,
           },
           overrideAccess: true,

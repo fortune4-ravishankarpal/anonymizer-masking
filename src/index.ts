@@ -39,9 +39,7 @@ export const anonymizerMasking =
         throw new Error('anonymizerMasking requires at least one configured collection')
       }
 
-      if (pluginOptions.metadata?.enabled && !pluginOptions.metadata.encryptionKey) {
-        throw new Error('anonymizerMasking requires metadata.encryptionKey when metadata is enabled')
-      }
+      // No validation needed - encryption is optional when metadata is enabled
 
       if (!pluginOptions.disabled) {
         AnonymizationRequests.hooks = {
