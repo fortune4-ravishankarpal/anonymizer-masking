@@ -27,11 +27,74 @@ export type AnonymizationMetadataConfig = {
   encryptionKey?: string
 }
 
+export type AnonymizerMaskingAutoRunConfig = {
+  /**
+   * The cron expression for how often queued anonymization jobs are processed.
+   *
+   * @default '* * * * *'
+   */
+  cron?: string
+  /**
+   * Process jobs from all queues. When `false`, only `queue` is processed.
+   *
+   * @default true
+   */
+  allQueues?: boolean
+  /**
+   * The queue to process when `allQueues` is `false`.
+   *
+   * @default 'default'
+   */
+  queue?: string
+  /**
+   * The maximum number of jobs processed per cron tick.
+   *
+   * @default 10
+   */
+  limit?: number
+  /**
+   * Disable automatic scheduling for tasks/workflows that declare a `schedule`.
+   *
+   * @default false
+   */
+  disableScheduling?: boolean
+  /**
+   * Silence the job-system console output (both info and error logs).
+   *
+   * @default false
+   */
+  silent?: boolean
+}
+
+export type AnonymizerMaskingJobsConfig = {
+  /**
+   * Toggle the Payload job system. When `false`, no tasks run and no cron is
+   * registered. This is separate from `autoRun` (which only controls the cron).
+   *
+   * @default true
+   */
+  enabled?: boolean
+  /**
+   * Control how queued anonymization jobs are auto-processed.
+   *
+   * - Omit or pass an object to customize the cron (defaults to running every
+   *   minute and processing all queues).
+   * - Pass `false` to disable the cron entirely; jobs only run when you call
+   *   `payload.jobs.run()` (or the admin Jobs panel) yourself.
+   *
+   * @default { allQueues: true, cron: '* * * * *' }
+   */
+  autoRun?: AnonymizerMaskingAutoRunConfig | false
+}
+
 export type AnonymizerMaskingConfig = {
   collections: Record<string, AnonymizationCollectionConfig>
   metadata?: AnonymizationMetadataConfig
+  jobs?: AnonymizerMaskingJobsConfig
   disabled?: boolean
 }
+
+const DEFAULT_AUTORUN_CRON = '* * * * *'
 
 export const anonymizerMasking =
   (pluginOptions: AnonymizerMaskingConfig) =>
@@ -40,16 +103,19 @@ export const anonymizerMasking =
         throw new Error('anonymizerMasking requires at least one configured collection')
       }
 
+      // Kill-switch: don't modify the incoming config at all when disabled
+      if (pluginOptions.disabled) {
+        return config
+      }
+
       // No validation needed - encryption is optional when metadata is enabled
 
-      if (!pluginOptions.disabled) {
-        AnonymizationRequests.hooks = {
-          ...AnonymizationRequests.hooks,
-          afterChange: [
-            ...(AnonymizationRequests.hooks?.afterChange || []),
-            createAnonymizeApprovedRequest(pluginOptions.collections, pluginOptions.metadata),
-          ],
-        }
+      AnonymizationRequests.hooks = {
+        ...AnonymizationRequests.hooks,
+        afterChange: [
+          ...(AnonymizationRequests.hooks?.afterChange || []),
+          createAnonymizeApprovedRequest(pluginOptions.collections, pluginOptions.metadata),
+        ],
       }
 
       if (!config.collections) config.collections = []
@@ -71,7 +137,31 @@ export const anonymizerMasking =
         createAnonymizeTask(pluginOptions.collections),
       )
 
-      config.jobs.autoRun = [{ allQueues: true, cron: "* * * * *", }]
+      // Optional toggle for the Payload job system itself
+      if (typeof pluginOptions.jobs?.enabled === 'boolean') {
+        config.jobs.enabled = pluginOptions.jobs.enabled
+      }
+
+      // The auto-run cron is fully configurable via the plugin options.
+      // Pass `autoRun: false` to disable the cron so queued jobs only run when
+      // drained manually (e.g. `payload.jobs.run()` from your own scheduler).
+      if (pluginOptions.jobs?.autoRun === false) {
+        delete config.jobs.autoRun
+      } else {
+        const autoRun = pluginOptions.jobs?.autoRun ?? {}
+        config.jobs.autoRun = [
+          {
+            allQueues: autoRun.allQueues ?? true,
+            cron: autoRun.cron ?? DEFAULT_AUTORUN_CRON,
+            ...(autoRun.queue !== undefined ? { queue: autoRun.queue } : {}),
+            ...(autoRun.limit !== undefined ? { limit: autoRun.limit } : {}),
+            ...(autoRun.disableScheduling !== undefined
+              ? { disableScheduling: autoRun.disableScheduling }
+              : {}),
+            ...(autoRun.silent !== undefined ? { silent: autoRun.silent } : {}),
+          },
+        ]
+      }
 
       const incomingOnInit = config.onInit
       config.onInit = async (payload) => {
