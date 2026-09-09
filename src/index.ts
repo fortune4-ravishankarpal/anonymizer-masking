@@ -70,7 +70,8 @@ export const anonymizerMasking =
       config.jobs.tasks.push(
         createAnonymizeTask(pluginOptions.collections),
       )
-      config.jobs.autoRun = true
+
+      config.jobs.autoRun = [{ allQueues: true, cron: "* * * * *", }]
 
       const incomingOnInit = config.onInit
       config.onInit = async (payload) => {

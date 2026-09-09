@@ -9,7 +9,7 @@ const resolveValue = (value: AnonymizationValue, anonymousId: string): unknown =
     typeof value === 'function' ? value({ anonymousId }) : value
 
 export type AnonymizeTaskInput = {
-    requestId: string
+    requestId: string | number
     encryptionKey?: string
     metadataEnabled?: boolean
 }
@@ -58,6 +58,12 @@ export const createAnonymizeTask = (
     handler: async ({ input, req }) => {
         const taskInput = input as AnonymizeTaskInput
 
+        // Relationship fields on Postgres expect numeric IDs (the hook queues the
+        // job with a string ID via `String(doc.id)`). Normalize the ID once here so
+        // it works both as an operation `id` and as a relationship value.
+        const numericRequestId = Number(taskInput.requestId)
+        const requestId = Number.isNaN(numericRequestId) ? taskInput.requestId : numericRequestId
+
         const startedAtMs = Date.now()
         const anonymousId = randomUUID()
         let totalDocumentsMasked = 0
@@ -74,12 +80,12 @@ export const createAnonymizeTask = (
             // 1. Fetch the anonymization request
             const requestRecord = await req.payload.findByID({
                 collection: 'anonymization-requests',
-                id: taskInput.requestId,
+                id: requestId,
                 overrideAccess: true,
             })
 
             if (!requestRecord) {
-                throw new Error(`Anonymization request ${taskInput.requestId} not found`)
+                throw new Error(`Anonymization request ${requestId} not found`)
             }
 
             const userId =
@@ -97,6 +103,7 @@ export const createAnonymizeTask = (
             }
 
             const transactionReq = { transactionID }
+            console.log('transactionID :', transactionID);
 
             try {
                 // 3. Create 'started' log
@@ -105,7 +112,7 @@ export const createAnonymizeTask = (
                     collection: 'anonymization-logs',
                     data: {
                         anonymousId,
-                        request: taskInput.requestId,
+                        request: requestId,
                         startedAt,
                         status: 'started',
                         totalCollections: Object.keys(configuredCollections).length,
@@ -233,7 +240,7 @@ export const createAnonymizeTask = (
                 // 7. Update the request to completed
                 await req.payload.update({
                     collection: 'anonymization-requests',
-                    id: taskInput.requestId,
+                    id: requestId,
                     data: {
                         anonymizedRecord: anonymizedRecord.id,
                         status: 'completed',
@@ -249,7 +256,10 @@ export const createAnonymizeTask = (
                     id: startedLog.id,
                     data: {
                         status: 'completed',
+                        completedAt: new Date().toISOString(),
                         durationMs,
+                        totalCollections: Object.keys(configuredCollections).length,
+                        totalDocuments: totalDocumentsMasked,
                         collectionResults,
                     },
                     overrideAccess: true,
@@ -279,7 +289,7 @@ export const createAnonymizeTask = (
                         collection: 'anonymization-logs',
                         data: {
                             anonymousId,
-                            request: taskInput.requestId,
+                            request: requestId,
                             startedAt: new Date(startedAtMs).toISOString(),
                             status: 'failed',
                             durationMs,

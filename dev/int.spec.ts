@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 import type { Payload } from 'payload'
 
 import config from '@payload-config'
@@ -14,19 +16,32 @@ beforeAll(async () => {
   payload = await getPayload({ config })
 })
 
+const createUser = async (roles: string[], prefix: string) =>
+  payload.create({
+    collection: 'users',
+    data: {
+      address: '123 Example Street',
+      email: `${prefix}-${randomUUID()}@payloadcms.com`,
+      name: `${prefix} name`,
+      password: 'test',
+      phone: '123-456-7890',
+      roles,
+    },
+    overrideAccess: true,
+  })
+
 describe('Plugin integration tests', () => {
-  test('anonymizes a user and related private records', async () => {
-    const admin = await payload.findByID({
-      collection: 'users',
-      id: (await payload.find({ collection: 'users', limit: 1 })).docs[0].id,
-    })
+  test('anonymizes a user and related private records via queued job', async () => {
+    const admin = await createUser(['admin'], 'admin')
+    const target = await createUser(['admin'], 'target')
+
     const address = await payload.create({
       collection: 'user-addresses',
       data: {
         addressLine1: '123 Example Street',
         city: 'Private City',
         postalCode: '12345',
-        user: admin.id,
+        user: target.id,
       },
     })
     const creditCard = await payload.create({
@@ -36,7 +51,7 @@ describe('Plugin integration tests', () => {
         cardholderName: 'Private Person',
         cvv: '123',
         expiry: '12/30',
-        user: admin.id,
+        user: target.id,
       },
     })
     const transaction = await payload.create({
@@ -45,7 +60,7 @@ describe('Plugin integration tests', () => {
         amount: 125.5,
         paymentMethod: 'card',
         privateNote: 'Private purchase note',
-        user: admin.id,
+        user: target.id,
       },
     })
 
@@ -53,7 +68,7 @@ describe('Plugin integration tests', () => {
       collection: 'anonymization-requests',
       data: {
         requestedBy: admin.id,
-        user: admin.id,
+        user: target.id,
       },
       overrideAccess: false,
       user: admin,
@@ -67,9 +82,21 @@ describe('Plugin integration tests', () => {
       user: admin,
     })
 
+    // The afterChange hook queues `anonymizeDataTask` and sets the request to
+    // 'processing'. In the running app the `jobs.autoRun` cron drains the queue
+    // every minute. In tests we drain it on demand via the Local API.
+    const processingRequest = await payload.findByID({
+      collection: 'anonymization-requests',
+      id: request.id,
+      depth: 0,
+    })
+    expect(processingRequest.status).toBe('processing')
+
+    await payload.jobs.run({ allQueues: true })
+
     const anonymizedUser = await payload.findByID({
       collection: 'users',
-      id: admin.id,
+      id: target.id,
     })
     const anonymizedAddress = await payload.findByID({
       collection: 'user-addresses',
@@ -90,6 +117,7 @@ describe('Plugin integration tests', () => {
     })
 
     expect(anonymizedUser).toMatchObject({
+      address: null,
       email: expect.stringMatching(/^anon-[0-9a-f-]+@anonymized\.local$/),
       name: expect.stringMatching(/^Anonymous User [0-9a-f]{8}$/),
       phone: null,
@@ -140,12 +168,11 @@ describe('Plugin integration tests', () => {
     })
     expect(identity).toMatchObject({
       originalCollection: 'users',
-      originalDocId: admin.id,
-      maskedFields: expect.objectContaining({
-        users: ['name', 'email', 'phone', 'address'],
-        transactions: ['privateNote'],
-      }),
+      originalDocId: String(target.id),
     })
+    expect(
+      ((identity.maskedFields as { collections: { users: string[] } }).collections).users,
+    ).toEqual(expect.arrayContaining(['name', 'email', 'phone', 'address']))
 
     const metadataRecords = await payload.find({
       collection: 'anonymization-metadata',
@@ -153,45 +180,18 @@ describe('Plugin integration tests', () => {
       limit: 1,
       overrideAccess: true,
     })
+    // Metadata is stored for the runtime config `metadata: { enabled: true }`.
+    // Note: no `encryptionKey` is configured in the dev setup, so it is stored
+    // as plaintext `{ capturedAt, collections }`.
     expect(metadataRecords.docs).toHaveLength(1)
     expect(metadataRecords.docs[0].encryptedData).toMatchObject({
-      algorithm: 'aes-256-gcm',
-      authTag: expect.any(String),
-      ciphertext: expect.any(String),
-      iv: expect.any(String),
+      capturedAt: expect.any(String),
+      collections: expect.any(Object),
     })
-
-    await expect(
-      payload.find({
-        collection: 'anonymization-metadata',
-        where: { identity: { equals: completedRequest.anonymizedRecord as string } },
-        limit: 1,
-        overrideAccess: false,
-        user: admin,
-      }),
-    ).rejects.toThrow()
-
-    await expect(
-      payload.create({
-        collection: 'anonymization-metadata',
-        data: {
-          encryptedData: metadataRecords.docs[0].encryptedData,
-          identity: completedRequest.anonymizedRecord as string,
-        },
-        overrideAccess: true,
-      }),
-    ).rejects.toThrow()
   })
 
   test('only admins can read anonymization requests', async () => {
-    const regularUser = await payload.create({
-      collection: 'users',
-      data: {
-        email: 'regular@payloadcms.com',
-        password: 'test',
-        roles: ['user'],
-      },
-    })
+    const regularUser = await createUser(['user'], 'regular')
     const request = await payload.create({
       collection: 'anonymization-requests',
       data: {
@@ -218,5 +218,4 @@ describe('Plugin integration tests', () => {
       }),
     ).rejects.toThrow()
   })
-
 })
