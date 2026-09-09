@@ -8,6 +8,7 @@ import { AnonymizationLogs } from './collections/AnonymizationLogs.js'
 import { AnonymizationKey } from './collections/AnonymizationKey.js'
 import { AnonymizationMetadata } from './collections/AnonymizationMetadata.js'
 import { createAnonymizeApprovedRequest } from './hooks/anonymizeApprovedRequest.js'
+import { createAnonymizeTask } from './tasks/anonymizeTask.js'
 
 export type AnonymizationValue =
   | boolean
@@ -58,6 +59,18 @@ export const anonymizerMasking =
       if (pluginOptions.metadata?.enabled === true) {
         config.collections.push(AnonymizationKey, AnonymizationMetadata)
       }
+
+      // Register the anonymization task in the jobs queue
+      if (!config.jobs) {
+        config.jobs = {}
+      }
+      if (!config.jobs.tasks) {
+        config.jobs.tasks = []
+      }
+      config.jobs.tasks.push(
+        createAnonymizeTask(pluginOptions.collections),
+      )
+      config.jobs.autoRun = true
 
       const incomingOnInit = config.onInit
       config.onInit = async (payload) => {

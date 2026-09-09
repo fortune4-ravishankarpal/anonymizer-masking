@@ -31,7 +31,7 @@ export const AnonymizationRequests: CollectionConfig = {
             name: 'status',
             type: 'select',
             defaultValue: 'pending',
-            options: ['pending', 'approved', 'completed', 'rejected'],
+            options: ['pending', 'approved', 'processing', 'completed', 'rejected'],
             required: true,
         },
         {
