@@ -9,4 +9,3 @@ dev:generate-types
 in dev folder not in root folder
 
 i use window system with in vscode git bash is default terminal
- 
